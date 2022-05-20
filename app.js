@@ -6,7 +6,9 @@ const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
 // const encrypt = require('mongoose-encryption');
-const sha512 = require('js-sha512');
+// const sha512 = require('js-sha512');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 const app = express();
 
@@ -44,11 +46,14 @@ app.route("/login")
       if (!foundUser) {
         console.log("No such user");
       } else {
-        if (foundUser.password !== sha512(req.body.password)) {
-          console.log("Incorrect password");
-        } else {
-          res.render("secrets");
-        }
+        // if (foundUser.password !== sha512(req.body.password)) {
+        bcrypt.compare(req.body.password, foundUser.password, function(err, result) {
+          if (result !== true) {
+            console.log("Incorrect password");
+          } else {
+            res.render("secrets");
+          }
+        });
       }
     }
   })
@@ -59,12 +64,16 @@ app.route("/register")
   res.render("register");
 })
 .post(function(req, res) {
-  const newUser = new User({
-    email: req.body.username,
-    password: sha512(req.body.password)
-  });
-  newUser.save();
-  res.redirect("/");
+  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+    const newUser = new User({
+      email: req.body.username,
+      // password: sha512(req.body.password)
+      password: hash
+    });
+    newUser.save();
+    res.redirect("/");
+  })
+
 });
 
 
