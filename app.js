@@ -5,7 +5,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+// const encrypt = require('mongoose-encryption');
+const sha512 = require('js-sha512');
 
 const app = express();
 
@@ -21,11 +22,10 @@ const userSchema = new mongoose.Schema({
   password: String
 });
 
-// don't !!!
 const secret = process.env.SECRET;
 
 
-userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
+// userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
 const User = new mongoose.model("User", userSchema);
 
 app.get("/", function(req, res) {
@@ -44,7 +44,7 @@ app.route("/login")
       if (!foundUser) {
         console.log("No such user");
       } else {
-        if (foundUser.password !== req.body.password) {
+        if (foundUser.password !== sha512(req.body.password)) {
           console.log("Incorrect password");
         } else {
           res.render("secrets");
@@ -61,7 +61,7 @@ app.route("/register")
 .post(function(req, res) {
   const newUser = new User({
     email: req.body.username,
-    password: req.body.password
+    password: sha512(req.body.password)
   });
   newUser.save();
   res.redirect("/");
