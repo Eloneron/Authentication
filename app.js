@@ -5,18 +5,31 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-// const encrypt = require('mongoose-encryption');
-// const sha512 = require('js-sha512');
-const bcrypt = require('bcrypt');
+const session = require('express-session');
+const passport = require('passport');
+const passportLocalMongoose = require('passport-local-mongoose');
 const saltRounds = 10;
 
 const app = express();
 
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.urlencoded({
+  extended: true
+}));
 
-mongoose.connect('mongodb://127.0.0.1:27017/userDB', { useNewUrlParser: true });
+app.use(session({
+  secret: "secretString1",
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+mongoose.connect('mongodb://127.0.0.1:27017/userDB', {
+  useNewUrlParser: true
+});
 
 
 const userSchema = new mongoose.Schema({
@@ -24,56 +37,87 @@ const userSchema = new mongoose.Schema({
   password: String
 });
 
-const secret = process.env.SECRET;
+userSchema.plugin(passportLocalMongoose);
 
-
-// userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]});
 const User = new mongoose.model("User", userSchema);
+
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.get("/", function(req, res) {
   res.render("home");
 });
 
 app.route("/login")
-.get(function(req, res) {
-  res.render("login");
-})
-.post(function(req, res) {
-  User.findOne({email: req.body.username}, function(err, foundUser) {
-    if (err) {
-      console.log(err);
-    } else {
-      if (!foundUser) {
-        console.log("No such user");
-      } else {
-        // if (foundUser.password !== sha512(req.body.password)) {
-        bcrypt.compare(req.body.password, foundUser.password, function(err, result) {
-          if (result !== true) {
-            console.log("Incorrect password");
-          } else {
-            res.render("secrets");
-          }
-        });
-      }
-    }
+  .get(function(req, res) {
+    res.render("login");
   })
-});
+  .post(passport.authenticate("local",{
+
+  successRedirect: "/secrets",
+
+  failureRedirect: "/login"
+
+}));
+
+// below code is old and vulnerable - DON'T USE:
+  // .post(function(req, res) {
+  //   const user = new User({
+  //     username: req.body.username,
+  //     password: req.body.password
+  //   });
+  //   req.login(user, function(err) {
+  //     if (err) {
+  //       console.log(err);
+  //     } else {
+  //       passport.authenticate('local')(req, res, function() {
+  //         res.redirect('/secrets');
+  //       });
+  //     }
+  //   });
+  //
+  //
+  // });
 
 app.route("/register")
-.get(function(req, res) {
-  res.render("register");
-})
-.post(function(req, res) {
-  bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
-    const newUser = new User({
-      email: req.body.username,
-      // password: sha512(req.body.password)
-      password: hash
-    });
-    newUser.save();
-    res.redirect("/");
+  .get(function(req, res) {
+    res.render("register");
   })
+  .post(function(req, res) {
+    User.register({
+        username: req.body.username
+      },
+      req.body.password,
+      function(err, user) {
+        if (err) {
+          console.log(err);
+        } else {
+          passport.authenticate('local')(req, res, function() {
+            res.redirect('/secrets');
+          });
+        }
+      });
+  });
 
+
+
+app.get('/secrets', function(req, res) {
+  // don't cache secrets page, so that going to prev page after logout doesn't show secrets
+  res.set('Cache-Control', 'no-cache, private, no-store, must-revalidate, max-stale=0, post-check=0, pre-check=0');
+
+  if (req.isAuthenticated()) {
+    res.render('secrets');
+  } else {
+    res.redirect('login');
+  }
+});
+
+app.get('/logout', function(req, res) {
+  req.logout(function(err) {
+    if (err) {  console.log(err); }
+    res.redirect('/');
+  });
 });
 
 
