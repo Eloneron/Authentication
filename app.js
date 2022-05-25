@@ -62,7 +62,7 @@ passport.use(new GoogleStrategy({
     callbackURL: "http://localhost:3000/auth/google/secrets"
   },
   function(accessToken, refreshToken, profile, cb) {
-    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+    User.findOrCreate({ googleId: profile.id, email: profile.emails[0].value }, function (err, user) {
       return cb(err, user);
     });
   }
@@ -72,7 +72,7 @@ app.get("/", function(req, res) {
   res.render("home");
 });
 
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] })
+app.get('/auth/google', passport.authenticate('google', { scope: ['openid', 'profile', 'email'] })
 );
 
 app.get('/auth/google/secrets',
